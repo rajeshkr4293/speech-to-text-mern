@@ -1,3 +1,5 @@
+const connectDB = require("./config/db");
+
 const uploadRoutes = require("./routes/uploadRoutes");
 
 const express = require("express");
@@ -16,6 +18,8 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 app.use("/api", uploadRoutes);
+
+connectDB();
 
 
 app.listen(PORT, () => {
