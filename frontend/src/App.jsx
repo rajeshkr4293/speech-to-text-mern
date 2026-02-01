@@ -2,14 +2,13 @@ import { useState, useRef, useEffect } from "react";
 
 function App() {
   const [history, setHistory] = useState([]);
-
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const [recording, setRecording] = useState(false);
-
   const [file, setFile] = useState(null);
   const [transcription, setTranscription] = useState("");
   const [loading, setLoading] = useState(false);
+  const [recording, setRecording] = useState(false);
+
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   useEffect(() => {
     fetch("https://speech-to-text-mern.onrender.com/api/transcriptions")
@@ -19,38 +18,29 @@ function App() {
   }, []);
 
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-
-    if (!selectedFile) return;
-
-    if (!selectedFile.type.startsWith("audio/")) {
+    const f = e.target.files[0];
+    if (!f) return;
+    if (!f.type.startsWith("audio/")) {
       alert("Please upload a valid audio file");
       return;
     }
-
-    setFile(selectedFile);
+    setFile(f);
   };
 
   const startRecording = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mediaRecorder = new MediaRecorder(stream);
+    const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
 
-    mediaRecorderRef.current = mediaRecorder;
+    mediaRecorderRef.current = recorder;
     audioChunksRef.current = [];
 
-    mediaRecorder.ondataavailable = (event) => {
-      audioChunksRef.current.push(event.data);
+    recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
+    recorder.onstop = () => {
+      const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+      setFile(new File([blob], "recording.webm", { type: "audio/webm" }));
     };
 
-    mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
-      const audioFile = new File([audioBlob], "recording.wav", {
-        type: "audio/wav",
-      });
-      setFile(audioFile);
-    };
-
-    mediaRecorder.start();
+    recorder.start();
     setRecording(true);
   };
 
@@ -60,10 +50,7 @@ function App() {
   };
 
   const handleUpload = async () => {
-    if (!file) {
-      alert("Please select or record an audio file");
-      return;
-    }
+    if (!file) return alert("Select or record audio");
 
     const formData = new FormData();
     formData.append("audio", file);
@@ -74,104 +61,117 @@ function App() {
     try {
       const res = await fetch(
         "https://speech-to-text-mern.onrender.com/api/transcribe",
-        {
-          method: "POST",
-          body: formData,
-        }
+        { method: "POST", body: formData }
       );
       const data = await res.json();
       setTranscription(data.transcription);
     } catch {
-      setTranscription("Failed to transcribe audio. Please try again.");
+      setTranscription("Transcription failed.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl p-8 space-y-7">
+    <div className="min-h-screen bg-slate-200 px-6 py-12">
 
-        <h1 className="text-3xl font-bold text-center text-gray-800 tracking-tight">
-          🎙️ Speech to Text
-        </h1>
+      <div className="max-w-3xl mx-auto space-y-12">
 
-        <p className="text-center text-gray-500 text-sm leading-relaxed">
-          Upload or record audio and get instant transcription
-        </p>
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-semibold text-slate-900">
+            🎙️ Speech to Text
+          </h1>
+          <p className="text-sm text-slate-600">
+            Upload or record audio and get instant AI transcription
+          </p>
+        </div>
 
-        <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center">
+        {/* Audio Input Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6">
+          <h2 className="text-lg font-medium text-slate-800">
+            Audio Input
+          </h2>
+
           <input
             type="file"
             accept="audio/*"
             onChange={handleFileChange}
-            className="w-full"
+            className="block text-sm"
           />
+
           {file && (
-            <p className="mt-2 text-sm text-gray-600">
-              Selected: <span className="font-medium">{file.name}</span>
+            <p className="text-sm text-slate-600">
+              Selected: {file.name}
             </p>
           )}
+
+          <div className="flex gap-4">
+            {!recording ? (
+              <button
+                onClick={startRecording}
+                className="px-4 py-2 rounded-lg border border-slate-300 text-sm"
+              >
+                Start Recording
+              </button>
+            ) : (
+              <button
+                onClick={stopRecording}
+                className="px-4 py-2 rounded-lg border border-slate-300 text-sm"
+              >
+                Stop Recording
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex gap-3">
-          {!recording ? (
-            <button
-              onClick={startRecording}
-              className="w-full bg-green-600 text-white py-2.5 rounded-xl hover:bg-green-700 transition-all duration-200 active:scale-[0.98]"
-            >
-              🎙️ Record
-            </button>
-          ) : (
-            <button
-              onClick={stopRecording}
-              className="w-full bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 transition-all duration-200 active:scale-[0.98]"
-            >
-              ⏹ Stop
-            </button>
-          )}
+        {/* Action Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 flex justify-center">
+          <button
+            onClick={handleUpload}
+            disabled={loading || !file}
+            className="px-6 py-2 rounded-lg border border-slate-400 text-sm disabled:opacity-50"
+          >
+            {loading ? "Transcribing..." : "Transcribe Audio"}
+          </button>
         </div>
 
-        <button
-          onClick={handleUpload}
-          disabled={loading || !file}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl transition-all duration-200 disabled:opacity-60 active:scale-[0.98]"
-        >
-          {loading ? "Transcribing..." : "Transcribe Audio"}
-        </button>
-
-        <div className="bg-gray-100 rounded-xl p-4 min-h-[100px]">
-          <h2 className="text-sm font-semibold text-gray-600 mb-1">
+        {/* Result Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-3">
+          <h2 className="text-lg font-medium text-slate-800">
             Transcription
           </h2>
-          <p className="text-gray-800 text-sm whitespace-pre-line">
+          <div className="min-h-[120px] text-sm text-slate-700">
             {transcription || "Your transcription will appear here..."}
-          </p>
+          </div>
         </div>
 
-        <div className="bg-gray-50 rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">
+        {/* History Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
+          <h2 className="text-lg font-medium text-slate-800">
             Previous Transcriptions
           </h2>
 
           {history.length === 0 ? (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-slate-600">
               No transcriptions yet.
             </p>
           ) : (
-            <ul className="space-y-2 max-h-48 overflow-y-auto">
+            <div className="space-y-3">
               {history.map((item) => (
-                <li
+                <div
                   key={item._id}
-                  className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 text-sm hover:shadow-md transition"
+                  className="border border-slate-200 rounded-lg p-3 text-sm"
                 >
-                  <p className="text-gray-800">{item.transcriptionText}</p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <div className="text-slate-800">
+                    {item.transcriptionText}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
                     {new Date(item.createdAt).toLocaleString()}
-                  </p>
-                </li>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
 
